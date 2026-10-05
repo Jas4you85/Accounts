@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>MyCash V1.1</title>
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--primary:#111827;--green:#15803d;--red:#dc2626;--amber:#b45309;--blue:#2563eb}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit} button{cursor:pointer}.app{max-width:560px;margin:auto;min-height:100vh;padding-bottom:82px}
+header{background:var(--primary);color:#fff;padding:20px 18px 24px;border-radius:0 0 24px 24px}.brand{display:flex;justify-content:space-between;align-items:center}.brand h1{margin:0;font-size:24px}.brand small{opacity:.7}.cash{margin-top:20px}.cash small{opacity:.7}.cash strong{display:block;font-size:34px;margin-top:3px}
+main{padding:16px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 2px 8px #00000008}.card small{color:var(--muted)}.card strong{display:block;font-size:20px;margin-top:5px}.green{color:var(--green)}.red{color:var(--red)}.amber{color:var(--amber)}.blue{color:var(--blue)}
+.section{margin-top:18px}.section h2{font-size:17px;margin:0 0 10px}.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.btn{border:0;border-radius:13px;padding:12px 8px;background:#eef2ff;color:#1e3a8a;font-weight:700}.btn.primary{background:#111827;color:white}.btn.green{background:#dcfce7;color:#166534}.btn.red{background:#fee2e2;color:#991b1b}.btn.amber{background:#fef3c7;color:#92400e}
+.tx{background:#fff;border:1px solid var(--line);border-radius:15px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;gap:10px}.tx .title{font-weight:700}.tx small{display:block;color:var(--muted);margin-top:3px}.amount{font-weight:800;white-space:nowrap}.income{color:var(--green)}.expense{color:var(--red)}.credit{color:var(--amber)}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(560px,100%);background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:7px 5px calc(7px + env(safe-area-inset-bottom));z-index:5}.nav button{border:0;background:none;color:var(--muted);padding:7px 2px;font-size:12px}.nav button.active{color:#111827;font-weight:800}.nav span{display:block;font-size:20px}
+form{background:#fff;border:1px solid var(--line);border-radius:18px;padding:15px}.field{margin-bottom:12px}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}.field input,.field select,.field textarea{width:100%;border:1px solid #d1d5db;border-radius:11px;padding:11px;background:#fff}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hidden{display:none!important}.actions{display:flex;gap:8px}.actions button{flex:1}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#f3f4f6;font-size:11px;margin-left:4px}
+.toolbar{display:flex;gap:8px;margin-bottom:10px}.toolbar>*{flex:1}.empty{text-align:center;color:var(--muted);padding:30px}
+.bar{height:9px;background:#eef0f4;border-radius:10px;overflow:hidden}.bar i{display:block;height:100%;background:#111827}.reportrow{margin:12px 0}.reportrow .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+.pin-overlay{position:fixed;inset:0;background:#111827f5;color:white;z-index:20;display:flex;align-items:center;justify-content:center;padding:25px}.pinbox{width:min(340px,100%);text-align:center}.pinbox h2{margin-bottom:8px}.pinbox input{text-align:center;font-size:28px;letter-spacing:8px;border:0;border-radius:12px;padding:12px;width:100%;margin:15px 0}.danger{color:#b91c1c}
+footer{text-align:center;color:#9ca3af;font-size:11px;padding:20px}
+</style>
+</head>
+<body>
+<div id="lock" class="pin-overlay hidden">
+  <div class="pinbox">
+    <h2>🔒 MyCash</h2><p>Enter your PIN</p>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+    <button class="btn primary" style="width:100%" onclick="unlock()">Unlock</button>
+    <p id="pinError" class="danger"></p>
+  </div>
+</div>
+<div class="app">
+<header>
+ <div class="brand"><div><h1>MyCash</h1><small>V1.1 • Personal Finance</small></div><button class="btn" onclick="lockNow()">🔒</button></div>
+ <div class="cash"><small>Available Cash</small><strong id="available">BHD 0.000</strong></div>
+</header>
+<main id="main"></main>
+<nav class="nav">
+ <button data-page="home" onclick="showPage('home')"><span>⌂</span>Home</button>
+ <button data-page="add" onclick="showPage('add')"><span>＋</span>Add</button>
+ <button data-page="transactions" onclick="showPage('transactions')"><span>☷</span>Transactions</button>
+ <button data-page="reports" onclick="showPage('reports')"><span>▥</span>Reports</button>
+</nav>
+</div>
+<script>
+const KEY='mycash_v1_1_data', PINKEY='mycash_v1_1_pin';
+let data=JSON.parse(localStorage.getItem(KEY)||'{"transactions":[]}');
+let editingId=null;
+const money=n=>'BHD '+Number(n||0).toFixed(3);
+const today=()=>new Date().toISOString().slice(0,10);
+const monthNow=()=>today().slice(0,7);
+const save=()=>localStorage.setItem(KEY,JSON.stringify(data));
+const id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function monthTx(m){return data.transactions.filter(x=>x.date.startsWith(m))}
+function calc(m=monthNow()){
+ let tx=monthTx(m), income=0, expense=0, given=0, received=0, repaid=0;
+ tx.forEach(x=>{if(x.type==='income')income+=+x.amount;if(x.type==='expense')expense+=+x.amount;if(x.type==='credit_given')given+=+x.amount;if(x.type==='credit_received')received+=+x.amount;if(x.type==='repayment')repaid+=+x.amount});
+ return {income,expense,given,received,repaid,cash:income-expense-given+received+repaid};
+}
+function outstandingGiven(){
+ const balances={};
+ data.transactions.forEach(x=>{
+  if(x.type==='credit_given') balances[x.person]=(balances[x.person]||0)+(+x.amount);
+  if(x.type==='repayment') balances[x.person]=(balances[x.person]||0)-(+x.amount);
+ });
+ return Object.entries(balances).filter(([,v])=>v>0.0001);
+}
+function outstandingReceived(){
+ const balances={};
+ data.transactions.forEach(x=>{
+  if(x.type==='credit_received') balances[x.person]=(balances[x.person]||0)+(+x.amount);
+  if(x.type==='repayment_received') balances[x.person]=(balances[x.person]||0)-(+x.amount);
+ });
+ return Object.entries(balances).filter(([,v])=>v>0.0001);
+}
+function showPage(page){
+ document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+ if(page==='home')renderHome(); if(page==='add')renderAdd(); if(page==='transactions')renderTransactions(); if(page==='reports')renderReports();
+}
+function renderHome(){
+ const c=calc(), main=document.getElementById('main');
+ document.getElementById('available').textContent=money(c.cash);
+ main.innerHTML=`<div class="cards">
+ <div class="card"><small>Cash In</small><strong class="green">${money(c.income)}</strong></div>
+ <div class="card"><small>Expenses</small><strong class="red">${money(c.expense)}</strong></div>
+ <div class="card"><small>You Gave</small><strong class="amber">${money(c.given)}</strong></div>
+ <div class="card"><small>Credit Received</small><strong class="blue">${money(c.received)}</strong></div>
+ </div>
+ <div class="section"><h2>Quick Add</h2><div class="quick">
+ <button class="btn green" onclick="newTx('income')">＋ Income</button>
+ <button class="btn red" onclick="newTx('expense')">＋ Expense</button>
+ <button class="btn amber" onclick="newTx('credit_given')">＋ Credit</button>
+ </div></div>
+ <div class="section"><h2>Outstanding</h2>
+ <div class="card"><b>People who owe you</b><div>${outstandingGiven().map(([p,v])=>`<div class="tx"><div>${esc(p)}</div><b class="amber">${money(v)}</b></div>`).join('')||'<div class="empty">None</div>'}</div>
+ <div class="card" style="margin-top:8px"><b>You owe</b><div>${outstandingReceived().map(([p,v])=>`<div class="tx"><div>${esc(p)}</div><b class="blue">${money(v)}</b></div>`).join('')||'<div class="empty">None</div>'}</div>
+ </div>
+ <div class="section"><h2>Recent</h2>${recentHtml(5)}</div>`;
+}
+function recentHtml(n){
+ let a=[...data.transactions].sort((a,b)=>b.date.localeCompare(a.date)||b.created-b.created).slice(0,n);
+ return a.map(txHtml).join('')||'<div class="empty">No transactions yet.</div>';
+}
+function txHtml(x){
+ let sign=x.type==='income'?'+':x.type==='expense'?'-':x.type==='repayment'?'-':x.type==='credit_received'?'+':'-';
+ let cls=x.type==='income'||x.type==='credit_received'?'income':x.type==='expense'?'expense':'credit';
+ let name=x.type==='credit_given'?'Credit given to '+x.person:x.type==='credit_received'?'Credit received from '+x.person:x.type==='repayment'?'Repayment to '+x.person:x.type==='repayment_received'?'Repayment received from '+x.person:x.category;
+ return `<div class="tx"><div><div class="title">${esc(name)} ${x.status?`<span class="pill">${esc(x.status)}</span>`:''}</div><small>${x.date}${x.remark?' • '+esc(x.remark):''}</small></div><div><div class="amount ${cls}">${sign}${money(x.amount)}</div><div class="actions"><button class="btn" onclick="editTx('${x.id}')">Edit</button><button class="btn" onclick="delTx('${x.id}')">Delete</button></div></div></div>`;
+}
+function renderAdd(prefill){
+ let x=editingId?data.transactions.find(t=>t.id===editingId):null;
+ let type=prefill||x?.type||'income';
+ document.getElementById('main').innerHTML=formHtml(type,x);
+}
+function newTx(type){editingId=null;showPage('add');setTimeout(()=>{document.getElementById('type').value=type;toggleType()},0)}
+function formHtml(type,x){
+ const cats={income:['Salary','Profit','Other Income'],expense:['Food','Shop','Top-up','Transport','Home','Bills','Other']};
+ let options=(cats[type]||[]).map(c=>`<option ${x?.category===c?'selected':''}>${c}</option>`).join('');
+ return `<div class="section"><h2>${x?'Edit Transaction':'Add Transaction'}</h2><form onsubmit="submitTx(event)">
+ <div class="field"><label>Type</label><select id="type" onchange="toggleType()">
+ <option value="income" ${type==='income'?'selected':''}>Cash In</option><option value="expense" ${type==='expense'?'selected':''}>Expense</option>
+ <option value="credit_given" ${type==='credit_given'?'selected':''}>Credit Given</option><option value="credit_received" ${type==='credit_received'?'selected':''}>Credit Received</option>
+ <option value="repayment" ${type==='repayment'?'selected':''}>Repayment I Paid</option><option value="repayment_received" ${type==='repayment_received'?'selected':''}>Repayment I Received</option>
+ </select></div>
+ <div id="catField" class="field ${type==='income'||type==='expense'?'':'hidden'}"><label>Category</label><select id="category">${options}</select></div>
+ <div id="personField" class="field ${type==='income'||type==='expense'?'hidden':''}"><label>Person / Company</label><input id="person" value="${esc(x?.person||'')}" placeholder="e.g. Ahmed"></div>
+ <div class="row"><div class="field"><label>Amount (BHD)</label><input id="amount" type="number" step="0.001" min="0" required value="${x?.amount||''}"></div>
+ <div class="field"><label>Date</label><input id="date" type="date" required value="${x?.date||today()}"></div></div>
+ <div class="field"><label>Remark</label><textarea id="remark" rows="2" placeholder="Optional">${esc(x?.remark||'')}</textarea></div>
+ <div id="statusField" class="field ${['credit_given','credit_received'].includes(type)?'':'hidden'}"><label>Status</label><select id="status"><option>Pending</option><option>Partially Paid</option><option>Paid</option></select></div>
+ <div class="actions"><button type="submit" class="btn primary">${x?'Save Changes':'Save Transaction'}</button><button type="button" class="btn" onclick="showPage('home')">Cancel</button></div>
+ </form></div>`;
+}
+function toggleType(){
+ let t=document.getElementById('type').value;
+ document.getElementById('catField').classList.toggle('hidden',!(t==='income'||t==='expense'));
+ document.getElementById('personField').classList.toggle('hidden',t==='income'||t==='expense');
+ document.getElementById('statusField').classList.toggle('hidden',!['credit_given','credit_received'].includes(t));
+ if(t==='income'||t==='expense'){let cats=t==='income'?['Salary','Profit','Other Income']:['Food','Shop','Top-up','Transport','Home','Bills','Other'];document.getElementById('category').innerHTML=cats.map(c=>`<option>${c}</option>`).join('')}
+}
+function submitTx(e){
+ e.preventDefault();let t=document.getElementById('type').value;
+ let x={id:editingId||id(),created:Date.now(),type:t,amount:+document.getElementById('amount').value,date:document.getElementById('date').value,remark:document.getElementById('remark').value.trim()};
+ if(t==='income'||t==='expense')x.category=document.getElementById('category').value; else{x.person=document.getElementById('person').value.trim()||'Unknown';if(['credit_given','credit_received'].includes(t))x.status=document.getElementById('status').value}
+ if(editingId){let i=data.transactions.findIndex(a=>a.id===editingId);data.transactions[i]={...data.transactions[i],...x}}else data.transactions.push(x);
+ save();editingId=null;showPage('home');
+}
+function editTx(i){editingId=i;showPage('add')}
+function delTx(i){if(confirm('Delete this transaction?')){data.transactions=data.transactions.filter(x=>x.id!==i);save();showPage('transactions')}}
+function renderTransactions(){
+ document.getElementById('main').innerHTML=`<div class="section"><h2>Transactions</h2><div class="toolbar"><input id="search" placeholder="Search..." oninput="filterTx()"><select id="filter" onchange="filterTx()"><option value="">All</option><option value="income">Cash In</option><option value="expense">Expense</option><option value="credit_given">Credit Given</option><option value="credit_received">Credit Received</option><option value="repayment">Repayment Paid</option><option value="repayment_received">Repayment Received</option></select></div><div id="txlist"></div></div>`;
+ filterTx();
+}
+function filterTx(){let q=(document.getElementById('search')?.value||'').toLowerCase(),f=document.getElementById('filter')?.value||'';let a=[...data.transactions].sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created).filter(x=>(!f||x.type===f)&&(!q||JSON.stringify(x).toLowerCase().includes(q)));document.getElementById('txlist').innerHTML=a.map(txHtml).join('')||'<div class="empty">No matching transactions.</div>'}
+function renderReports(){
+ let m=monthNow(), c=calc(m), cats={};monthTx(m).filter(x=>x.type==='expense').forEach(x=>cats[x.category]=(cats[x.category]||0)+x.amount);
+ let max=Math.max(...Object.values(cats),1);
+ document.getElementById('main').innerHTML=`<div class="section"><h2>Monthly Report</h2><div class="field"><label>Month</label><input id="reportMonth" type="month" value="${m}" onchange="renderReports()"></div>
+ <div class="cards"><div class="card"><small>Income</small><strong class="green">${money(c.income)}</strong></div><div class="card"><small>Expenses</small><strong class="red">${money(c.expense)}</strong></div><div class="card"><small>Credit Given</small><strong class="amber">${money(c.given)}</strong></div><div class="card"><small>Net Cash</small><strong>${money(c.cash)}</strong></div></div>
+ <div class="section"><h2>Expenses by Category</h2><div class="card">${Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="reportrow"><div class="top"><span>${esc(k)}</span><b>${money(v)}</b></div><div class="bar"><i style="width:${v/max*100}%"></i></div></div>`).join('')||'<div class="empty">No expenses.</div>'}</div></div>
+ <div class="section"><h2>Backup & Security</h2><div class="card"><button class="btn primary" style="width:100%;margin-bottom:8px" onclick="exportBackup()">⬇ Export Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="document.getElementById('importFile').click()">⬆ Restore Backup</button><input id="importFile" type="file" accept=".json" class="hidden" onchange="importBackup(event)"><button class="btn" style="width:100%" onclick="setPin()">🔐 Set / Change PIN</button></div></div><footer>MyCash V1.1 • Data stays on this device/browser.</footer></div>`;
+}
+function exportBackup(){let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='MyCash_Backup_'+today()+'.json';a.click();URL.revokeObjectURL(a.href)}
+function importBackup(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!d.transactions||!Array.isArray(d.transactions))throw 0;if(confirm('Replace current data with this backup?')){data=d;save();showPage('home')}}catch{alert('Invalid backup file.')}};r.readAsText(f)}
+function setPin(){let p=prompt('Enter a 4-6 digit PIN (leave blank to remove PIN):');if(p===null)return;if(p&&!/^\d{4,6}$/.test(p)){alert('PIN must be 4-6 digits.');return}if(p)localStorage.setItem(PINKEY,p);else localStorage.removeItem(PINKEY);alert(p?'PIN saved.':'PIN removed.')}
+function lockNow(){if(localStorage.getItem(PINKEY))document.getElementById('lock').classList.remove('hidden')}
+function unlock(){let p=document.getElementById('pinInput').value;if(p===localStorage.getItem(PINKEY)){document.getElementById('lock').classList.add('hidden');document.getElementById('pinInput').value='';document.getElementById('pinError').textContent=''}else document.getElementById('pinError').textContent='Incorrect PIN'}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+showPage('home'); if(localStorage.getItem(PINKEY))document.getElementById('lock').classList.remove('hidden');
+</script>
+</body></html>
